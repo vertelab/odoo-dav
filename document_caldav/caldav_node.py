@@ -23,25 +23,35 @@ from openerp.addons.document_webdav_fast import nodes
 from openerp.addons.document_webdav_fast.dav_fs import dict_merge2
 from openerp.addons.document.document import nodefd_static
 from openerp.tools.safe_eval import safe_eval
+from datetime import datetime, timedelta, time
+from time import strptime, mktime, strftime
+from openerp.tools import DEFAULT_SERVER_DATE_FORMAT, DEFAULT_SERVER_DATETIME_FORMAT
+from openerp import models, fields, api, _
+
 import logging
 _logger = logging.getLogger(__name__)
 
+import re
+
+try:
+    from icalendar import Calendar, Event, vDatetime, FreeBusy
+except ImportError:
+    raise Warning('icalendar library missing, pip install icalendar')
 
 _NS_CALDAV = "urn:ietf:params:xml:ns:caldav"
 
-
 class node_model_calendar_collection(nodes.node_res_obj):
-    "The children of this node are all models that implement calendar.model"
+    "The children of this node are all models that implement vevent.model"
 
     def _get_default_node(self):
-        return node_addressbook("default", self, self.context, 'res.partner')
+        return node_calendar("default", self, self.context, 'res.partner')
 
     def _get_filter_nodes(self, cr):
-        '''find all models that implement vcard.model'''
+        '''find all models that implement vevent.model'''
         fields_obj = self.context._dirobj.pool.get('ir.model.fields')
         fields_ids = fields_obj.search(cr, self.context.uid,
-            [('name', '=', 'vcard_uid'),
-             ('model_id.model', '!=', 'vcard.model')])
+            [('name', '=', 'id'),
+             ('model_id.model', '!=', 'vevent.model')])
         fields = fields_obj.browse(cr, self.context.uid, fields_ids)
         return [node_filter("m-%s" % _field.model_id.model, self,
                                  self.context, _field.model_id.model,
@@ -79,25 +89,26 @@ class node_filter(nodes.node_class):
                  displayname=''):
         super(node_filter, self).__init__(path, parent, context)
         self.mimetype = 'application/x-directory'
+        #~ self.mimetype = 'text/calendar'
         self.create_date = parent.create_date
         self.ir_model = ir_model
         self.displayname = displayname
 
     def _get_default_node(self):
-        return node_addressbook("default", self, self.context, self.ir_model)
+        return node_calendar("default", self, self.context, self.ir_model)
 
     def _get_filter_nodes(self, cr, filter_ids):
         filters_obj = self.context._dirobj.pool.get('ir.filters')
         filter_data = filters_obj.read(cr, self.context.uid, filter_ids,
                                        ['context', 'domain', 'name'])
-        return [node_addressbook("filtered-%s" % _filter['id'], self,
+        return [node_calendar("filtered-%s" % _filter['id'], self,
                                  self.context,
                                  self.ir_model, _filter['name'],
                                  _filter['domain'], _filter['id'])
                 for _filter in filter_data]
 
     def _get_ttag(self, cr):
-        return 'addressbook-%d-%s' % (self.context.uid, self.ir_model)
+        return 'calendar-%d-%s' % (self.context.uid, self.ir_model)
 
     def get_dav_resourcetype(self, cr):
         return [('collection', 'DAV:')]
@@ -131,20 +142,21 @@ class node_calendar(nodes.node_class):
     that match the filter."""
     DAV_PROPS = dict_merge2(nodes.node_dir.DAV_PROPS,
                            {"DAV:": ('supported-report-set',),
-                            _NS_CARDDAV: ('address-data',
+                            _NS_CALDAV: ('address-data',
                                           'supported-address-data',
                                           'max-resource-size',
                                           )})
     DAV_M_NS = {
                 "DAV:": '_get_dav',
-                _NS_CARDDAV: '_get_carddav',
+                _NS_CALDAV: '_get_caldav',
                 }
-    http_options = {'DAV': ['addressbook']}
+    http_options = {'DAV': ['calendar']}
 
     def __init__(self, path, parent, context,
+                 #~ ir_model='calendar.event', filter_name=None,
                  ir_model='res.partner', filter_name=None,
                  filter_domain=None, filter_id=None):
-        super(node_addressbook, self).__init__(path, parent, context)
+        super(node_calendar, self).__init__(path, parent, context)
         self.mimetype = 'application/x-directory'
         self.create_date = parent.create_date
         self.ir_model = ir_model
@@ -164,7 +176,7 @@ class node_calendar(nodes.node_class):
     def children(self, cr, domain=None):
         if not domain:
             domain = []
-        return self._child_get(cr, domain=(domain + self.filter_domain))
+        return self._child_get(cr, domain=(domain + self.filter_domain), name=None)
 
     def child(self, cr, name, domain=None):
         if not domain:
@@ -177,101 +189,104 @@ class node_calendar(nodes.node_class):
     def _child_get(self, cr, name=False, parent_id=False, domain=None):
         children = []
         res_partner_obj = self.context._dirobj.pool.get(self.ir_model)
+        #~ res_partner_obj = self.context._dirobj.pool.get('res.partner')
         if not domain:
             domain = []
 
+        _logger.error('_child_get name = %s' % name)
         if name:
-            domain.append(('vcard_filename', '=', name))
+            domain.append(('name', '=', name))
         partner_ids = res_partner_obj.search(cr, self.context.uid, domain)
 
         for partner in res_partner_obj.browse(cr, self.context.uid,
                                               partner_ids):
             children.append(
-                res_node_contact(partner.vcard_filename,
+                res_node_event(partner.name,
                                  self, self.context, partner,
                                  None, None, self.ir_model))
         return children
 
     def _get_ttag(self, cr):
-        return 'addressbook-%d-%s' % (self.context.uid, self.path)
+        return 'calendar-%d-%s' % (self.context.uid, self.path)
 
     def get_dav_resourcetype(self, cr):
         return [('collection', 'DAV:'),
-                ('addressbook', _NS_CARDDAV)]
+                ('calendar', _NS_CALDAV)]
 
     def _get_dav_supported_report_set(self, cr):
         return ("supported-report", "DAV:",
                 ("report", "DAV:",
-                 [("addressbook-query", _NS_CARDDAV),
-                  ("addressbook-multiget", _NS_CARDDAV)]))
+                 [("calendar-query", _NS_CALDAV),
+                  ("calendar-multiget", _NS_CALDAV)]))
 
-    def _get_carddav_addressbook_description(self, cr):
+    def _get_caldav_calendar_description(self, cr):
         return self.displayname
 
-    def _get_carddav_supported_addressbook_data(self, cr):
-        return ('calendar-data', _NS_CARDDAV, None,
-                    {'content-type': "text/vcard", 'version': "3.0"})
+    def _get_caldav_supported_calendar_data(self, cr):
+        return ('calendar-data', _NS_CALDAV, None,
+                    {'content-type': "text/calendar", 'version': "3.0"})
 
-    def _get_carddav_max_resource_size(self, cr):
+    def _get_caldav_max_resource_size(self, cr):
         return 65535
 
     def get_domain(self, cr, filter_node):
         '''
-        Return a domain for the carddav filter
+        Return a domain for the caldav filter
 
         :param cr: database cursor
         :param filter_node: the DOM Element of filter
         :return: a list for domain
         '''
         # TODO Check if some of the code of
-        #  http://bazaar.launchpad.net/~aw/openerp-vertel/6.1/files/head:/carddav/
+        #  http://bazaar.launchpad.net/~aw/openerp-vertel/6.1/files/head:/caldav/
         #  can be recycled.
-        #   webdav.py, _carddav_filter_domain()
+        #   webdav.py, _caldav_filter_domain()
         if not filter_node:
             return []
-        if filter_node.localName != 'addressbook-query':
+        if filter_node.localName != 'calendar-query':
             return []
 
         raise ValueError("filtering is not implemented")
 
     def create_child(self, cr, path, data=None):
         if not data:
-            raise ValueError("Cannot create a contact with no data")
+            raise ValueError("Cannot create a event with no data")
         res_partner_obj = self.context._dirobj.pool.get(self.ir_model)
-        uid = res_partner_obj.get_uid_by_vcard(data)
+        uid = res_partner_obj.get_uid_by_event(data)
         partner_id = res_partner_obj.create(cr, self.context.uid,
                                             {'name': 'DUMMY_NAME',
-                                             'vcard_uid': uid,
-                                             'vcard_filename': path,
+                                             'id': uid,
+                                             #~ 'event_filename': path,
                                              'dav_filter_id': self.filter_id})
-        res_partner_obj.set_vcard(cr, self.context.uid, [partner_id], data)
+        res_partner_obj.set_event(cr, self.context.uid, [partner_id], data)
         partner = res_partner_obj.browse(cr, self.context.uid, partner_id)
-        return res_node_contact(partner.vcard_filename, self, self.context,
+        return res_node_event(partner.event_filename, self, self.context,
                                 partner, None, None, self.ir_model)
 
 
-class res_node_contact(nodes.node_class):
-    "This node represents a single vCard"
+class res_node_event(nodes.node_class):
+    "This node represents a single event"
     our_type = 'file'
     DAV_PROPS = {
-                 "urn:ietf:params:xml:ns:carddav": (
-                    'addressbook-description',
+                 "urn:ietf:params:xml:ns:caldav": (
+                    'calendar-description',
                  )}
 
     DAV_PROPS_HIDDEN = {
-                        "urn:ietf:params:xml:ns:carddav": (
+                        "urn:ietf:params:xml:ns:caldav": (
                            'address-data',
                         )}
 
     DAV_M_NS = {
-           "urn:ietf:params:xml:ns:carddav": '_get_carddav'}
+           "urn:ietf:params:xml:ns:caldav": '_get_caldav'}
 
-    http_options = {'DAV': ['addressbook']}
+    http_options = {'DAV': ['calendar']}
 
     def __init__(self, path, parent, context, res_obj=None, res_model=None,
                  res_id=None, ir_model=None):
-        super(res_node_contact, self).__init__(path, parent, context)
-        self.mimetype = 'text/vcard; charset=utf-8'
+        super(res_node_event, self).__init__(path, parent, context)
+        #~ self.mimetype = 'text/calendar; charset=utf-8'
+        self.mimetype = 'text/calendar'
         self.create_date = parent.create_date
         self.write_date = parent.write_date or parent.create_date
         self.displayname = None
@@ -288,9 +303,24 @@ class res_node_contact(nodes.node_class):
         return nodefd_static(self, cr, mode)
 
     def get_data(self, cr, fil_obj=None):
-        return self.res_obj.get_vcard().serialize()
+        _logger.error('get_data method. %s' % fil_obj)
+        #~ raise Warning(self.res_obj)
+        return self.res_obj.get_caldav_calendar()
+        #~ return self.res_obj.get_ics_calendar().serialize()
+        
+        
+        #~ return '''BEGIN:VEVENT
+#~ SUMMARY:AxelCoolAllday
+#~ UID:20@CalendarDemoTest-83
+#~ ATTENDEE:CN=AxelCool
+#~ CREATED:20160307T105532Z
+#~ DTSTART;VALUE=DATE:20160303
+#~ END:VEVENT
+#~ '''
+        #~ return self.res_obj.get_event().serialize()
+        #~ return self.res_obj.to_ical()
 
-    def _get_carddav_address_data(self, cr):
+    def _get_caldav_address_data(self, cr):
         return self.get_data(cr)
 
     def get_dav_resourcetype(self, cr):
@@ -303,10 +333,10 @@ class res_node_contact(nodes.node_class):
         return 0
 
     def set_data(self, cr, data):
-        self.res_obj.set_vcard(data)
+        self.res_obj.set_event(data)
 
     def _get_ttag(self, cr):
-        return 'addressbook-contact-%s-%d' % (self.res_obj._name,
+        return 'calendar-event-%s-%d' % (self.res_obj._name,
                                               self.res_obj.id)
 
     def rm(self, cr):
@@ -314,5 +344,148 @@ class res_node_contact(nodes.node_class):
         partner_obj = self.context._dirobj.pool.get(self.ir_model)
         return partner_obj.unlink(cr, uid, [self.res_obj.id])
 
+
+class res_partner(models.Model):
+    _inherit = "res.partner"
+
+    #~ @api.one
+    def get_caldav_calendar(self):
+        _logger.error('get_caldav_calendar %s' % self.id)
+        calendar = Calendar()
+
+        exported_ics = []
+        for event in reversed(self.env['calendar.event'].search([('partner_ids','in',self.id)])):
+            temporary_ics = event.get_caldav_file(exported_ics, self)
+            if temporary_ics:
+                exported_ics.append(temporary_ics[1])
+                calendar.add_component(temporary_ics[0])
+                    
+        tmpCalendar = calendar.to_ical()
+        tmpSearch = re.findall('RRULE:[^\n]*\\;[^\n]*', tmpCalendar)
+        
+        for counter in range(len(tmpSearch)):
+            tmpCalendar = tmpCalendar.replace(tmpSearch[counter], tmpSearch[counter].replace('\\;', ';', tmpSearch[counter].count('\\;')))
+        
+        return tmpCalendar
+
+class calendar_event(models.Model):
+    _inherit = 'calendar.event'
+
+    @api.multi
+    def get_caldav_file(self, events_exported, partner):
+        """
+        Returns iCalendar file for the event invitation.
+        @param event: event object (browse record)
+        @return: .ics file content
+        """
+        ics = Event()
+        event = self[0]
+
+        #~ raise Warning(self.env.cr.dbname)
+        #~ The method below needs som proper rewriting to avoid overusing libraries.
+        def ics_datetime(idate, allday=False):
+            if idate:
+                if allday:
+                    return str(vDatetime(datetime.fromtimestamp(mktime(strptime(idate, DEFAULT_SERVER_DATETIME_FORMAT)))).to_ical())[:8]
+                else:
+                    return vDatetime(datetime.fromtimestamp(mktime(strptime(idate, DEFAULT_SERVER_DATETIME_FORMAT)))).to_ical() + 'Z'
+            return False
+
+        #~ try:
+            #~ # FIXME: why isn't this in CalDAV?
+            #~ import vobject
+        #~ except ImportError:
+            #~ return res
+
+        #~ cal = vobject.iCalendar()
+        
+        #~ event = cal.add('vevent')
+        if not event.start or not event.stop:
+            raise osv.except_osv(_('Warning!'), _("First you have to specify the date of the invitation."))
+        ics['summary'] = event.name
+        if event.description:
+            ics['description'] = event.description
+        if event.location:
+            ics['location'] = event.location
+        if event.rrule:
+            ics['rrule'] = event.rrule
+            #~ ics.add('rrule', str(event.rrule), encode=0)
+            #~ raise Warning(ics['rrule'])
+
+        if event.alarm_ids:
+            for alarm in event.alarm_ids:
+                valarm = ics.add('valarm')
+                interval = alarm.interval
+                duration = alarm.duration
+                trigger = valarm.add('TRIGGER')
+                trigger.params['related'] = ["START"]
+                if interval == 'days':
+                    delta = timedelta(days=duration)
+                elif interval == 'hours':
+                    delta = timedelta(hours=duration)
+                elif interval == 'minutes':
+                    delta = timedelta(minutes=duration)
+                trigger.value = delta
+                valarm.add('DESCRIPTION').value = alarm.name or 'Odoo'
+        if event.attendee_ids:
+            for attendee in event.attendee_ids:
+                attendee_add = ics.get('attendee')
+                attendee_add = attendee.cn and ('CN=' + attendee.cn) or ''
+                if attendee.cn and attendee.email:
+                    attendee_add += ':'
+                attendee_add += attendee.email and ('MAILTO:' + attendee.email) or ''
+                
+                ics.add('attendee', attendee_add, encode=0)
+                
+        if events_exported:
+            event_not_found = True
+            
+            for event_comparison in events_exported:
+                #~ raise Warning('event_comparison = %s ics = %s' % (event_comparison, ics))
+                if str(ics) == event_comparison:
+                    event_not_found = False
+                    break
+            
+            if event_not_found:
+                events_exported.append(str(ics))
+                
+                ics['uid'] = '%s@%s-%s' % (event.id, self.env.cr.dbname, partner.id)
+                ics['created'] = ics_datetime(strftime(DEFAULT_SERVER_DATETIME_FORMAT))
+                tmpStart = ics_datetime(event.start, event.allday)
+                tmpEnd = ics_datetime(event.stop, event.allday)
+                
+                if event.allday:
+                    ics['dtstart;value=date'] = tmpStart
+                else:
+                    ics['dtstart'] = tmpStart
+                    
+                if tmpStart != tmpEnd or not event.allday:
+                    if event.allday:
+                        ics['dtend;value=date'] = str(vDatetime(datetime.fromtimestamp(mktime(strptime(event.stop, DEFAULT_SERVER_DATETIME_FORMAT))) + timedelta(hours=24)).to_ical())[:8]
+                    else:
+                        ics['dtend'] = tmpEnd
+                
+                return [ics, events_exported]
+            
+        else:
+            events_exported.append(str(ics))
+            
+            ics['uid'] = '%s@%s-%s' % (event.id, self.env.cr.dbname, partner.id)
+            ics['created'] = ics_datetime(strftime(DEFAULT_SERVER_DATETIME_FORMAT))
+            tmpStart = ics_datetime(event.start, event.allday)
+            tmpEnd = ics_datetime(event.stop, event.allday)
+            
+            if event.allday:
+                ics['dtstart;value=date'] = tmpStart
+            else:
+                ics['dtstart'] = tmpStart
+                
+            if tmpStart != tmpEnd or not event.allday:
+                if event.allday:
+                    ics['dtend;value=date'] = str(vDatetime(datetime.fromtimestamp(mktime(strptime(event.stop, DEFAULT_SERVER_DATETIME_FORMAT))) + timedelta(hours=24)).to_ical())[:8]
+                else:
+                    ics['dtend'] = tmpEnd
+            
+            return [ics, events_exported]
 
 # vim:expandtab:smartindent:tabstop=4:softtabstop=4:shiftwidth=4

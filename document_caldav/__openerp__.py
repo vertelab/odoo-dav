@@ -26,7 +26,7 @@
                 "base_vcard", "crm_vcard"],
     'author': 'Vertel AB',
     "category": "",
-    "summary": "A simple CardDAV implementation",
+    "summary": "A simple CalDAV implementation",
     'license': 'AGPL-3',
     "description": """
 A very simple CalDAV implementation inspired of InitOS Carddav implementation

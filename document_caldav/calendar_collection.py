@@ -32,7 +32,7 @@ class document_directory(models.Model):
 
     calendar_collection = fields.Boolean('Calendar Collection',default=False)
     
-    def get_node_class(self, cr, uid, ids, dbro=None, dynamic=False,                       context=None):
+    def get_node_class(self, cr, uid, ids, dbro=None, dynamic=False, context=None):
         if dbro is None:
             dbro = self.browse(cr, uid, ids, context=context)
 

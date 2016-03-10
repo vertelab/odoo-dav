@@ -10,7 +10,7 @@
             <field name="company_id" ref="base.main_company"/>
             <field name="type">directory</field>
             <field eval="[(6,0,[ref('base.group_document_user')])]" name="group_ids"/>
-            <field name="name">calendars</field>
+            <field name="name">calendar</field>
         </record>
         <record id="document_directory_users" model="document.directory">
             <field name="domain">[('id','=',uid)]</field>

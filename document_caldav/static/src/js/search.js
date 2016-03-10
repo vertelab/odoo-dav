@@ -1,4 +1,4 @@
-openerp.document_carddav = function(instance){
+openerp.document_caldav = function(instance){
     var module = instance.web.search;
 
     module.CustomFilters.include({
