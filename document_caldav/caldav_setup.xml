@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <openerp>
     <data>
-        <!-- /contacts tree -->
+        <!-- /calendar tree -->
         <record id="document_directory_calendar" model="document.directory">
             <field name="domain">[]</field>
             <field eval="1" name="resource_find_all"/>

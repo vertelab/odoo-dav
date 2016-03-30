@@ -22,8 +22,8 @@
 {
     "name": "CalDAV",
     "version": "0.1",
-    "depends": ["base", "document_webdav_fast", "web",
-                "base_vcard", "crm_vcard"],
+    "depends": ["base", "document_webdav_fast", "web"],
+                #~ "base_vcard", "crm_vcard"],
     'author': 'Vertel AB',
     "category": "",
     "summary": "A simple CalDAV implementation",
