@@ -83,12 +83,10 @@ class node_model_calendar_collection(nodes.node_res_obj):
 
     def _child_get(self, cr, name=False, parent_id=False, domain=None):
         children = []
-        #~ res_partner_obj = self.context._dirobj.pool.get(self.ir_model)
         res_partner_obj = self.context._dirobj.pool.get('res.partner')
         if not domain:
             domain = []
 
-        #~ _logger.error('_child_get name = %s' % name)
         if name:
             domain.append(('name', '=', name))
         partner_ids = res_partner_obj.search(cr, self.context.uid, domain)
@@ -96,12 +94,9 @@ class node_model_calendar_collection(nodes.node_res_obj):
         for partner in res_partner_obj.browse(cr, self.context.uid,
                                               partner_ids):
             children.append(
-                #~ node_calendar(partner.name, self, self.context, 'res.partner'))
                 res_node_calendar(partner.name,
                                  self, self.context, partner,
                                  None, partner.id, 'res.partner'))
-        #~ _logger.error('_child_get | %s' % children)
-        #~ children.append(self._get_default_node())
         return children
 
 class node_filter(nodes.node_class):
@@ -114,7 +109,6 @@ class node_filter(nodes.node_class):
                  displayname=''):
         super(node_filter, self).__init__(path, parent, context)
         self.mimetype = 'application/x-directory'
-        #~ self.mimetype = 'text/calendar'
         self.create_date = parent.create_date
         self.ir_model = ir_model
         self.displayname = displayname
@@ -133,7 +127,6 @@ class node_filter(nodes.node_class):
                 for _filter in filter_data]
 
     def _get_ttag(self, cr):
-        _logger.error('_get_ttag | calendar-%d-%s' % (self.context.uid, self.ir_model))
         return 'calendar-%d-%s' % (self.context.uid, self.ir_model)
 
     def get_dav_resourcetype(self, cr):
@@ -145,23 +138,19 @@ class node_filter(nodes.node_class):
     def child(self, cr, name, domain=None):
         res = self._child_get(cr, name, domain=domain)
         if res:
-            #~ _logger.error('child res[0]: %s | res: %s' % (res[0], res))
             return res[0]
         return None
 
     def _child_get(self, cr, name=False, parent_id=False, domain=None):
         if name:
             if name.startswith('filtered-'):
-                #~ _logger.error('_child_get 1 | %s' % self._get_filter_nodes(cr, [int(name[9:])]))
                 return self._get_filter_nodes(cr, [int(name[9:])])
-            #~ _logger.error('_child_get 2 | %s' % [self._get_default_node()])
             return [self._get_default_node()]
 
         filters_obj = self.context._dirobj.pool.get('ir.filters')
         filter_ids = filters_obj.search(cr, self.context.uid,
             [('model_id', '=', self.ir_model),
              ('user_id', 'in', [self.context.uid, False])])
-        #~ _logger.error('_child_get | %s | %s' % ([self._get_default_node()], self._get_filter_nodes(cr, filter_ids)))
         return [self._get_default_node()] + \
             self._get_filter_nodes(cr, filter_ids)
 
@@ -204,7 +193,6 @@ class node_calendar(nodes.node_class):
     http_options = {'DAV': ['calendar-access']}
 
     def __init__(self, path, parent, context,
-                 #~ ir_model='calendar.event', filter_name=None,
                  ir_model='res.partner', filter_name=None,
                  filter_domain=None, filter_id=None):
         super(node_calendar, self).__init__(path, parent, context)
@@ -222,8 +210,6 @@ class node_calendar(nodes.node_class):
             self.displayname = "%s filtered by %s" % (ir_model, filter_name)
         else:
             self.displayname = "%s" % path
-        #~ _logger.error('path: %s | parent: %s | context: %s | filter_name: %s | filter_domain: %s | filter_id: %s' % (path, parent, context, filter_name, filter_domain, filter_id))
-        # TODO self.write_date = max(create_date) [sic!] of all partners
 
     def children(self, cr, domain=None):
         if not domain:
@@ -234,7 +220,6 @@ class node_calendar(nodes.node_class):
         if not domain:
             domain = []
         res = self._child_get(cr, name, domain=(domain + self.filter_domain))
-        #~ _logger.error('child method | %s' % (res))
         if res:
             return res[0]
         return None
@@ -242,11 +227,9 @@ class node_calendar(nodes.node_class):
     def _child_get(self, cr, name=False, parent_id=False, domain=None):
         children = []
         res_partner_obj = self.context._dirobj.pool.get(self.ir_model)
-        #~ res_partner_obj = self.context._dirobj.pool.get('res.partner')
         if not domain:
             domain = []
 
-        #~ _logger.error('_child_get name = %s' % name)
         if name:
             domain.append(('name', '=', name))
         partner_ids = res_partner_obj.search(cr, self.context.uid, domain)
@@ -257,7 +240,6 @@ class node_calendar(nodes.node_class):
                 res_node_calendar(partner.name,
                                  self, self.context, partner,
                                  None, partner.id, self.ir_model))
-        #~ _logger.error('_child_get | %s' % children)
         return children
 
     def _get_ttag(self, cr):
@@ -275,14 +257,7 @@ class node_calendar(nodes.node_class):
                     )
                 )
                 
-    #~ def _get_dav_supported_report_set(self, cr):
-        #~ return ("supported-report", "DAV:",
-                #~ ("report", "DAV:",
-                 #~ [("calendar-query", _NS_CALDAV),
-                  #~ ("calendar-multiget", _NS_CALDAV)]))
-
     def _get_caldav_calendar_description(self, cr):
-        #~ _logger.error('cal desc | %s' % self.displayname)
         return self.displayname
 
     def _get_caldav_supported_calendar_data(self, cr):
@@ -291,26 +266,6 @@ class node_calendar(nodes.node_class):
 
     def _get_caldav_max_resource_size(self, cr):
         return 65535
-
-    #~ def get_domain(self, cr, filter_node):
-        #~ '''
-        #~ Return a domain for the caldav filter
-#~ 
-        #~ :param cr: database cursor
-        #~ :param filter_node: the DOM Element of filter
-        #~ :return: a list for domain
-        #~ '''
-        #~ # TODO Check if some of the code of
-        #~ #  http://bazaar.launchpad.net/~aw/openerp-vertel/6.1/files/head:/caldav/
-        #~ #  can be recycled.
-        #~ #   webdav.py, _caldav_filter_domain()
-        #~ _logger.error('get_domain | %s' % filter_node.childNodes)
-        #~ if not filter_node:
-            #~ return []
-        #~ if filter_node.localName != 'calendar-query':
-            #~ return []
-#~ 
-        #~ raise ValueError("filtering is not implemented")
 
     # Method below is borrowed from 
     # http://bazaar.launchpad.net/~aw/openerp-vertel/6.1/view/head:/carddav/caldav_node.py
@@ -383,7 +338,6 @@ class node_calendar(nodes.node_class):
                                 #~ partner, None, None, self.ir_model)
 
     def _get_caldav_calendar_data(self, cr):
-        _logger.warning('_get_caldav_calendar_data')
         if self.context.get('DAV-client', '') in ('iPhone', 'iCalendar'):
             # Never return collective data to iClients, they get confused
             # because they do propfind on the calendar node with Depth=1
@@ -419,7 +373,6 @@ class res_node_calendar(nodes.node_class):
     def __init__(self, path, parent, context, res_obj=None, res_model=None,
                  res_id=None, ir_model=None):
         super(res_node_calendar, self).__init__(path, parent, context)
-        #~ self.mimetype = 'text/calendar; charset=utf-8'
         self.mimetype = 'text/calendar'
         self.create_date = parent.create_date
         self.write_date = parent.write_date or parent.create_date
@@ -434,58 +387,23 @@ class res_node_calendar(nodes.node_class):
             if self.res_obj.write_date:
                 self.write_date = self.res_obj.write_date
 
-        #~ _logger.error('path: %s | parent: %s | context: %s' % (path, parent, context))
-
-    #~ def children(self, cr, domain=None):
-        #~ _logger.warning('trying to get children')
-        #~ return self._child_get(cr, domain=domain)
-        #~ 
-    #~ def child(self, cr, name, domain=None):
-        #~ res = self._child_get(cr, name, domain=domain)
-        #~ if res:
-            #~ #_logger.error('child res[0]: %s | res: %s' % (res[0], res))
-            #~ return res[0]
-        #~ return None
-#~ 
-    #~ def _child_get(self, cr, name=False, parent_id=False, domain=None):
-        #~ calendar_file = self.get_data(cr)
-        #~ res = []
-        #~ for event in Calendar.from_ical(calendar_file).walk('vevent'):
-            #~ res.append(event.to_ical())
-        #~ return res
-
     def create_child(self, cr, path, data=None):
         if not data:
             raise ValueError("Cannot create a event with no data")
-        #~ _logger.error('cal.event | %s\nres.partner | %s' % (self.context._dirobj.pool.get('calendar.event'), self.context._dirobj.pool.get('res.partner')))
-        #~ partner = self.context._dirobj.pool.get(self.ir_model)
-        #~ partner_ids = partner.create(cr, self.context.uid, 
-                                    #~ {'name': 'DUMMY_NAME'
         
         self.res_obj.get_caldav_partner_event(data)
-        #~ self.context._dirobj.pool.get('calendar.event').set_caldav_event(data, partner)
         _logger.error('cal.event | %s\nres.partner | %s' % (self.context._dirobj.pool.get('calendar.event'), self.res_obj))
         if path.endswith('.ics'):
             path = path[:-4]
-        #~ res = []
-        #~ res.append(res_node_calendar(path, self, self.context, self.res_obj, None, self.res_id, self.ir_model))
-        #~ res.append(i for i in node_calendar.children(cr))
-        #~ return res
+
         return res_node_calendar(path, self, self.context, self.res_obj, None, self.res_id, self.ir_model)
-        #~ return self.get_data(cr)
 
     def open_data(self, cr, mode):
         return nodefd_static(self, cr, mode)
 
     def get_data(self, cr, fil_obj=None):
-        _logger.error('get_data method. %s' % self.context)
-        #~ raise Warning(self.res_obj)
         return self.res_obj.get_caldav_calendar()
         
-    #~ def _get_caldav_address_data(self, cr):
-        #~ _logger.error('_get_caldav_adress_data method | %s' % self.get_data(cr))
-        #~ return self.get_data(cr)
-
     #~ def get_dav_resourcetype(self, cr):
         #~ return ''
 
@@ -500,9 +418,7 @@ class res_node_calendar(nodes.node_class):
         return 0
 
     def set_data(self, cr, data):
-        _logger.warning('set_data')
-        pass
-        #~ self.res_obj.set_event(data)
+        self.res_obj.set_event(data)
 
     def _get_ttag(self, cr):
         return 'calendar-event-%s-%d' % (self.res_obj._name,
@@ -514,18 +430,13 @@ class res_node_calendar(nodes.node_class):
         return partner_obj.unlink(cr, uid, [self.res_obj.id])
         
     def _get_caldav_calendar_data(self, cr):
-        _logger.error('res_node_calendar | _get_caldav_calendar_data')
         return self.get_data(cr)
         
 class res_partner(models.Model):
     _inherit = "res.partner"
 
-    #~ @api.one
     def get_caldav_calendar(self):
-        #~ _logger.error('get_caldav_calendar %s' % self.id)
         calendar = Calendar()
-
-        _logger.error(self.name)
 
         exported_ics = []
         for event in reversed(self.env['calendar.event'].search([('partner_ids','in',self.id)])):
@@ -551,7 +462,6 @@ class res_partner(models.Model):
                 event_attendee_list = [event_attendee_list]
             
             for vAttendee in event_attendee_list:
-                _logger.error('Attendee found %s' % vAttendee)
                 attendee_mailto = re.search('(:MAILTO:)([a-zA-Z0-9_@.\-]*)', vAttendee)
                 attendee_cn = re.search('(CN=)([^:]*)', vAttendee)
                 if attendee_mailto:
@@ -560,7 +470,6 @@ class res_partner(models.Model):
                     attendee_cn = attendee_cn.group(2)
                 elif not attendee_mailto and not attendee_cn:
                     attendee_cn = vAttendee
-                _logger.error('Attendee found %s' % attendee_cn)
                 
                 if attendee_mailto:
                     partner_result = self.env['res.partner'].search([('email','=',attendee_mailto)])
@@ -588,14 +497,6 @@ class res_partner(models.Model):
 
     def get_caldav_partner_event(self, data):
         return self.env['calendar.event'].set_caldav_event(data, self)
-        
-#~ class openerp_dav_handler(openerp_dav_handler):
-    #~ 
-    #~ def urijoin(self,*ajoin):
-        #~ """ Return the base URI of this request, or even join it with the
-            #~ ajoin path elements
-        #~ """
-        #~ return '/'.join(ajoin)
 
 class calendar_event(models.Model):
     _inherit = 'calendar.event'
@@ -647,7 +548,6 @@ class calendar_event(models.Model):
             elif record.get('stop_date') and record['allday']:
                 record['stop_date'] = vDatetime(tmpStop - timedelta(hours=24)).dt.strftime(DEFAULT_SERVER_DATETIME_FORMAT)
                 record['stop'] = record['stop_date']
-            _logger.error('ICS %s' % record)
             self.env['calendar.event'].create(record)
             
     @api.multi
@@ -660,8 +560,6 @@ class calendar_event(models.Model):
         ics = Event()
         event = self[0]
 
-        #~ raise Warning(self.env.cr.dbname)
-        #~ The method below needs som proper rewriting to avoid overusing libraries.
         def ics_datetime(idate, allday=False):
             if idate:
                 if allday:
