@@ -23,7 +23,6 @@
     "name": "CalDAV",
     "version": "0.1",
     "depends": ["base", "document_webdav_fast", "web"],
-                #~ "base_vcard", "crm_vcard"],
     'author': 'Vertel AB',
     "category": "",
     "summary": "A simple CalDAV implementation",
@@ -34,8 +33,7 @@ A very simple CalDAV implementation inspired of InitOS Carddav implementation
 
 Urls:
 
-- For all partners: /webdav/$db_name/calendar/users/$login/a/m-res.partner/default/
-- For all leads: /webdav/$db_name/calendar/users/$login/a/m-crm.lead/default/
+- For a partners calendar: /webdav/$db_name/calendar/users/$login/a/$partner_name/
 
 Collections can be filtered, the url is then shown in the search view drop-down.
     """,
