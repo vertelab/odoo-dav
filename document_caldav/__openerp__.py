@@ -45,6 +45,7 @@ Collections can be filtered, the url is then shown in the search view drop-down.
     ],
     'demo': [
     ],
+    'external_dependenies': {'python': ['pywebdav','icalendar'],'bin': []},
     'test': [
     ],
     'installable': True,
