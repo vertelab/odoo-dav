@@ -18,7 +18,8 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 ##############################################################################
-
+# sudo pip install pywebdav
+# document_webdav_fast from https://github.com/initOS/openerp-dav
 from openerp.addons.document_webdav_fast import nodes
 from openerp.addons.document_webdav_fast.dav_fs import dict_merge2
 from openerp.addons.document.document import nodefd_static
