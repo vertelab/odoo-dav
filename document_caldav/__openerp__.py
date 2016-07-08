@@ -36,6 +36,8 @@ Urls:
 - For a partners calendar: /webdav/$db_name/calendar/users/$login/a/$partner_name/
 
 Collections can be filtered, the url is then shown in the search view drop-down.
+# sudo pip install pywebdav
+# document_webdav_fast from https://github.com/initOS/openerp-dav
     """,
     'data': [
         'caldav_setup.xml',
