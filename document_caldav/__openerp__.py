@@ -37,6 +37,7 @@ Urls:
 
 Collections can be filtered, the url is then shown in the search view drop-down.
 # sudo pip install pywebdav
+# sudo pip install icalendar
 # document_webdav_fast from https://github.com/initOS/openerp-dav
     """,
     'data': [
