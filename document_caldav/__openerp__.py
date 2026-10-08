@@ -3,7 +3,7 @@
 #
 #    OpenERP, Open Source Management Solution
 #    Copyright (C) 2010-2013 OpenERP s.a. (<http://openerp.com>).
-#    Copyright (C) 2013-2016 Vertel AB 
+#    Copyright (C) 2013-2016 Vertel Sverige AB 
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU Affero General Public License as
@@ -23,7 +23,7 @@
     "name": "CalDAV",
     "version": "0.1",
     "depends": ["base", "document_webdav_fast", "web"],
-    'author': 'Vertel AB',
+    'author': 'Vertel Sverige AB',
     "category": "",
     "summary": "A simple CalDAV implementation",
     'license': 'AGPL-3',

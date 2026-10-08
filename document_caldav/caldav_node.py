@@ -3,7 +3,7 @@
 #
 #    OpenERP, Open Source Management Solution
 #    Copyright (C) 2004-2010 Odoo SA 
-#    Copyright (C) 2013-2016 Vertel AB.
+#    Copyright (C) 2013-2016 Vertel Sverige AB.
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU Affero General Public License as
 #    published by the Free Software Foundation, either version 3 of the
